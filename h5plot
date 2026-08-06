@@ -11,7 +11,7 @@ import time
 
 from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, \
     QLineEdit, QListWidget, QPushButton, QScrollBar, QVBoxLayout, QWidget
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 from losoto.lib_operations import reorderAxes
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -745,9 +745,15 @@ class GraphWindow(QDialog):
                     vw = yaxis_weight
                     self.ax.plot(xaxis, vw, '--', alpha=0.25, color='C0')
                     self.ax.plot(xaxis, vw, 'h', label=plot_labels, color='C0')
-        if isphase:
-            self.ax.set_ylim(-np.pi, np.pi)
-        self.ax.set(xlabel=ax_labels[0], ylabel=ax_labels[1], xlim=limits[0], ylim=limits[1])
+        x_limits = limits[0]
+        y_limits = limits[1]
+        if self.mode == 'values' and self.parent is not None:
+            global_limits = self.parent.get_global_limits()
+            if global_limits is not None:
+                y_limits = [global_limits[0], global_limits[1]]
+        if isphase and y_limits is None:
+            y_limits = [-np.pi, np.pi]
+        self.ax.set(xlabel=ax_labels[0], ylabel=ax_labels[1], xlim=x_limits, ylim=y_limits)
         self.canvas.draw()
 
 
@@ -1072,6 +1078,9 @@ class GraphWindow2D(QDialog):
         Nrows = int(np.ceil(float(Nplots)/Ncols))
         # plot_window, axes = plt.subplots(Ncols, Nrows, figsize=(16, 9), constrained_layout=True)
         gs = GridSpec(Nrows, Ncols, figure=self.fig, left=0.05, right=0.95, bottom=0.05, top=0.95, hspace=0.04, wspace=0.025)
+        global_limits = None
+        if self.mode == 'values':
+            global_limits = self.parent.get_global_limits()
         Nlim = len(self.parent.stations)
         self.fig.suptitle(self.st.name + ' - {:s}'.format(self.direction))
         Nplotted = 0
@@ -1113,7 +1122,10 @@ class GraphWindow2D(QDialog):
                             vals = np.diff(vals, axis=0)
                         vals = wrap_phase(vals)
                         im = ax.imshow(vals, aspect='auto', extent=[0, x[-1]-x[0], y[0], y[-1]], interpolation='none', cmap=current_cmap, origin='lower')
-                        im.set_clim(-np.pi, np.pi)
+                        if global_limits is not None:
+                            im.set_clim(global_limits[0], global_limits[1])
+                        else:
+                            im.set_clim(-np.pi, np.pi)
                     else:
                         current_cmap = matplotlib.colormaps['viridis']
                         current_cmap.set_bad(color='w')
@@ -1141,7 +1153,10 @@ class GraphWindow2D(QDialog):
                             vals = np.diff(vals, axis=1)
                         if self.do_freqdiff:
                             vals = np.diff(vals, axis=0)
-                        im = ax.imshow(vals, aspect='auto', extent=[0, x[-1]-x[0], y[0], y[-1]], interpolation='none', cmap=current_cmap, origin='lower', vmin=0.5, vmax=2.0)
+                        if global_limits is not None:
+                            im = ax.imshow(vals, aspect='auto', extent=[0, x[-1]-x[0], y[0], y[-1]], interpolation='none', cmap=current_cmap, origin='lower', vmin=global_limits[0], vmax=global_limits[1])
+                        else:
+                            im = ax.imshow(vals, aspect='auto', extent=[0, x[-1]-x[0], y[0], y[-1]], interpolation='none', cmap=current_cmap, origin='lower', vmin=0.5, vmax=2.0)
                 elif self.mode == 'weights':
                     current_cmap = matplotlib.colormaps['viridis']
                     if ('pol' in self.parent.stcache.axes) and ('dir' in self.parent.stcache.axes):
@@ -1238,11 +1253,21 @@ class GraphWindow2D(QDialog):
             current_cmap = matplotlib.colormaps['hsv']
             current_cmap.set_bad(color='w')
             im = self.ax.imshow(vals.T, interpolation='none', extent=[plot_x[0], plot_x[-1], plot_y[0], plot_y[-1]], aspect='auto', cmap=current_cmap, origin='lower')
-            im.set_clim(-np.pi, np.pi)
+            global_limits = None
+            if self.mode == 'values' and self.parent is not None:
+                global_limits = self.parent.get_global_limits()
+            if global_limits is not None:
+                im.set_clim(global_limits[0], global_limits[1])
+            else:
+                im.set_clim(-np.pi, np.pi)
         else:
             current_cmap = matplotlib.colormaps['viridis']
             current_cmap.set_bad(color='w')
             im = self.ax.imshow(vals.T, interpolation='none', extent=[plot_x[0], plot_x[-1], plot_y[0], plot_y[-1]], aspect='auto', cmap=current_cmap, origin='lower')
+            if self.mode == 'values' and self.parent is not None:
+                global_limits = self.parent.get_global_limits()
+                if global_limits is not None:
+                    im.set_clim(global_limits[0], global_limits[1])
         cb = self.fig.colorbar(im)
         self.ax.set(xlabel=ax_labels[0], ylabel=ax_labels[1], xlim=limits[0], ylim=limits[1])
         self.canvas.draw()
@@ -1386,6 +1411,23 @@ class H5PlotGUI(QWidget):
         self.checkbox_layout.addWidget(self.check_pdiff, 1, 0)
         self.checkbox_layout.addWidget(self.check_pdiffx, 2, 0)
 
+        self.global_limits_layout = QGridLayout()
+        self.check_global_values = QCheckBox('Plot with global values')
+        self.check_global_values.toggled.connect(self._global_limits_toggle_event)
+        self.global_min_label = QLabel('Min')
+        self.global_max_label = QLabel('Max')
+        self.global_min_input = QLineEdit()
+        self.global_max_input = QLineEdit()
+        validator = QtGui.QDoubleValidator(self)
+        validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
+        self.global_min_input.setValidator(validator)
+        self.global_max_input.setValidator(validator)
+        self.global_limits_layout.addWidget(self.check_global_values, 0, 0)
+        self.global_limits_layout.addWidget(self.global_min_label, 0, 1)
+        self.global_limits_layout.addWidget(self.global_min_input, 0, 2)
+        self.global_limits_layout.addWidget(self.global_max_label, 1, 1)
+        self.global_limits_layout.addWidget(self.global_max_input, 1, 2)
+
         self.plotmode = 'values'
 
         self.plot_button = QPushButton('Plot')
@@ -1413,9 +1455,13 @@ class H5PlotGUI(QWidget):
         layout.addRow(self.solset_label, self.solset_picker)
         layout.addRow(plot_layout)
         layout.addRow(self.checkbox_layout)
+        layout.addRow(self.global_limits_layout)
         layout.addRow(self.plot_button)
         layout.addRow(self.plot_all_button)
         layout.addRow(self.station_picker)
+
+        self._update_global_limit_defaults()
+        self._global_limits_toggle_event()
 
     def _pdiff_event(self):
         if self.check_pdiff.isChecked():
@@ -1508,6 +1554,7 @@ class H5PlotGUI(QWidget):
             pass
         rvals, rweights, raxes = reorder_soltab(self.soltab)
         self.stcache.update(rvals, raxes, weights=rweights)
+        self._update_global_limit_defaults()
 
     def _dir_picker_event(self):
         """Callback function for when the direction is changed.
@@ -1548,12 +1595,109 @@ class H5PlotGUI(QWidget):
             self.check_pdiff.setEnabled(False)
             self.check_fdiff.setEnabled(False)
             self.check_tdiff.setEnabled(False)
+            self.check_global_values.setEnabled(False)
         else:
             self.plotmode = 'values'
             self.check_pdiff.setEnabled(True)
             self.check_fdiff.setEnabled(True)
             self.check_tdiff.setEnabled(True)
+            self.check_global_values.setEnabled(True)
+        self._global_limits_toggle_event()
         self.logger.info('Plotting {:s}'.format(self.plotmode))
+
+    def _global_limits_toggle_event(self):
+        enabled = self.check_global_values.isChecked() and (self.plotmode == 'values')
+        self.global_min_label.setEnabled(enabled)
+        self.global_max_label.setEnabled(enabled)
+        self.global_min_input.setEnabled(enabled)
+        self.global_max_input.setEnabled(enabled)
+
+    def _decode_axis_label(self, value):
+        try:
+            return value.decode('utf-8')
+        except AttributeError:
+            return str(value)
+
+    def _is_phase_soltab(self):
+        stype = self.soltab.getType().lower()
+        sname = self.soltab.name.lower()
+        return (stype in ['phase', 'rotation']) or ('phase' in sname)
+
+    def _is_amplitude_soltab(self):
+        stype = self.soltab.getType().lower()
+        sname = self.soltab.name.lower()
+        return (stype == 'amplitude') or ('amplitude' in sname)
+
+    def _collect_amplitude_reference_values(self):
+        values = np.asarray(self.stcache.values[0])
+        weights = np.asarray(self.stcache.weights)
+        axes = list(self.stcache.axes)
+
+        if 'pol' not in axes:
+            valid = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+            return values[valid]
+
+        pol_axis = axes.index('pol')
+        pol_values = [self._decode_axis_label(p).upper() for p in self.stcache.values[1]['pol']]
+
+        def select_pol(pol_idx):
+            vals = np.take(values, indices=pol_idx, axis=pol_axis)
+            wts = np.take(weights, indices=pol_idx, axis=pol_axis)
+            valid = np.isfinite(vals) & np.isfinite(wts) & (wts > 0)
+            return vals[valid]
+
+        if ('XX' in pol_values) and ('YY' in pol_values):
+            xx = select_pol(pol_values.index('XX'))
+            yy = select_pol(pol_values.index('YY'))
+            return np.concatenate((xx, yy))
+
+        if 'I' in pol_values:
+            return select_pol(pol_values.index('I'))
+
+        valid = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+        return values[valid]
+
+    def _compute_default_global_limits(self):
+        if self._is_phase_soltab():
+            return -np.pi, np.pi
+
+        if self._is_amplitude_soltab():
+            ampvals = self._collect_amplitude_reference_values()
+            if ampvals.size > 0:
+                med = np.nanmedian(ampvals)
+                if np.isfinite(med) and med > 0:
+                    return med / 2.5, med * 2.5
+            return 0.5, 2.0
+
+        vals = np.asarray(self.stcache.values[0])
+        wts = np.asarray(self.stcache.weights)
+        valid = np.isfinite(vals) & np.isfinite(wts) & (wts > 0)
+        if np.any(valid):
+            data = vals[valid]
+            return np.nanpercentile(data, 1), np.nanpercentile(data, 99)
+        return 0.0, 1.0
+
+    def _update_global_limit_defaults(self):
+        vmin, vmax = self._compute_default_global_limits()
+        self.global_min_input.setText('{:.6g}'.format(vmin))
+        self.global_max_input.setText('{:.6g}'.format(vmax))
+
+    def get_global_limits(self):
+        if not self.check_global_values.isChecked():
+            return None
+        try:
+            vmin = float(self.global_min_input.text())
+            vmax = float(self.global_max_input.text())
+        except ValueError:
+            self.logger.warning('Invalid global limits entered, ignoring.')
+            return None
+        if not np.isfinite(vmin) or not np.isfinite(vmax):
+            self.logger.warning('Global limits are not finite, ignoring.')
+            return None
+        if vmin >= vmax:
+            self.logger.warning('Global min >= max, ignoring global limits.')
+            return None
+        return vmin, vmax
 
     def plot_waterfall(self, labels=('x-axis', 'y-axis'), mode='values', plot_all=False):
         """ Show a two-dimensional waterfall plot of time vs. frequency.
