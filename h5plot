@@ -1410,6 +1410,7 @@ class H5PlotGUI(QWidget):
         self.checkbox_layout.addWidget(self.check_fdiff, 1, 1)
         self.checkbox_layout.addWidget(self.check_pdiff, 1, 0)
         self.checkbox_layout.addWidget(self.check_pdiffx, 2, 0)
+        self._update_poldiff_controls()
 
         self.global_limits_layout = QGridLayout()
         self.check_global_values = QCheckBox('Plot with global values')
@@ -1481,6 +1482,21 @@ class H5PlotGUI(QWidget):
         elif not self.check_pdiffx.isChecked():
             self.do_poldiff = False
 
+    def _update_poldiff_controls(self):
+        try:
+            pol_count = len(self.soltab.getAxisValues('pol'))
+        except TypeError:
+            pol_count = 0
+
+        parallel_enabled = pol_count == 2
+        cross_enabled = pol_count == 4
+        if not parallel_enabled and self.check_pdiff.isChecked():
+            self.check_pdiff.setChecked(False)
+        if not cross_enabled and self.check_pdiffx.isChecked():
+            self.check_pdiffx.setChecked(False)
+        self.check_pdiff.setVisible(parallel_enabled)
+        self.check_pdiffx.setVisible(cross_enabled)
+
     def _axis_picker_event(self):
         """Callback function for when the x-axis is changed.
 
@@ -1534,6 +1550,7 @@ class H5PlotGUI(QWidget):
         """
         soltab_prev = self.soltab.name
         self.soltab = self.solset.getSoltab(self.soltab_picker.currentText())
+        self._update_poldiff_controls()
         if self.soltab.name == soltab_prev:
             self.logger.debug("Soltab unchanged, not reordering")
             return
