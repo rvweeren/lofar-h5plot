@@ -330,6 +330,7 @@ class GraphWindow(QDialog):
         self.st = st
         self.parent = parent
         self.h5filename = getattr(parent, 'h5filename', '')
+        self.ax = None
         self.rectangle_selector = None
         self.selected_region = None
         self.selected_regions = []
@@ -970,6 +971,7 @@ class GraphWindow2D(QDialog):
         self.st = st
         self.parent = parent
         self.h5filename = getattr(parent, 'h5filename', '')
+        self.ax = None
         self.rectangle_selector = None
         self.selected_region = None
         self.selected_regions = []
