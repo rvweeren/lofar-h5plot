@@ -976,6 +976,7 @@ class GraphWindow2D(QDialog):
         self.selected_region = None
         self.selected_regions = []
         self.selection_patches = []
+        self.grid_pending_regions = {}
         self.mode = mode
         self.do_timediff = do_timediff
         self.do_freqdiff = do_freqdiff
@@ -1010,9 +1011,9 @@ class GraphWindow2D(QDialog):
 
         self.set_plot_window_title(frametitle)
 
-        self.button_next = QPushButton('Forward')
+        self.button_next = QPushButton('Next polarization')
         self.button_next.clicked.connect(self._forward_button_event)
-        self.button_prev = QPushButton('Back')
+        self.button_prev = QPushButton('Previous polarization')
         self.button_prev.clicked.connect(self._backward_button_event)
         self.button_prev.setEnabled(False)
         try:
@@ -1114,27 +1115,50 @@ class GraphWindow2D(QDialog):
         if not enabled:
             self.selected_region = None
             self.selected_regions = []
+            self.grid_pending_regions = {}
             for patch in self.selection_patches:
                 patch.remove()
             self.selection_patches = []
             self.flag_button.setEnabled(False)
+            self.canvas.draw_idle()
 
     def _on_region_press(self, event):
-        if event.inaxes is not self.ax or self.selected_region is None or self.rectangle_selector is None:
+        if event.xdata is None or event.ydata is None or event.inaxes is None:
             return
-        if event.xdata is None or event.ydata is None:
-            return
-        x_start, x_end, y_start, y_end = self.rectangle_selector.extents
-        if min(x_start, x_end) <= event.xdata <= max(x_start, x_end) and min(y_start, y_end) <= event.ydata <= max(y_start, y_end):
-            return
-        self.selected_regions.append(self.selected_region)
-        self.selection_patches.append(self.ax.add_patch(Rectangle(
-            (min(x_start, x_end), min(y_start, y_end)),
-            abs(x_end - x_start),
-            abs(y_end - y_start),
-            fill=False,
-            edgecolor='red')))
-        self.selected_region = None
+        if self.gridplot:
+            for station_index, selector in self.grid_rectangle_selectors.items():
+                if selector.ax == event.inaxes:
+                    pending = self.grid_pending_regions.get(station_index)
+                    if pending is None:
+                        return
+                    x_start, x_end, y_start, y_end = selector.extents
+                    if min(x_start, x_end) <= event.xdata <= max(x_start, x_end) and min(y_start, y_end) <= event.ydata <= max(y_start, y_end):
+                        return
+                    self.selected_regions.append((station_index, pending))
+                    self.selection_patches.append(selector.ax.add_patch(Rectangle(
+                        (min(x_start, x_end), min(y_start, y_end)),
+                        abs(x_end - x_start),
+                        abs(y_end - y_start),
+                        fill=False,
+                        edgecolor='red')))
+                    self.grid_pending_regions[station_index] = None
+                    self.canvas.draw_idle()
+                    return
+        else:
+            if event.inaxes is not self.ax or self.selected_region is None or self.rectangle_selector is None:
+                return
+            x_start, x_end, y_start, y_end = self.rectangle_selector.extents
+            if min(x_start, x_end) <= event.xdata <= max(x_start, x_end) and min(y_start, y_end) <= event.ydata <= max(y_start, y_end):
+                return
+            self.selected_regions.append(self.selected_region)
+            self.selection_patches.append(self.ax.add_patch(Rectangle(
+                (min(x_start, x_end), min(y_start, y_end)),
+                abs(x_end - x_start),
+                abs(y_end - y_start),
+                fill=False,
+                edgecolor='red')))
+            self.selected_region = None
+            self.canvas.draw_idle()
 
     def _on_region_selected(self, start_event, end_event):
         if start_event.xdata is None or start_event.ydata is None or end_event.xdata is None or end_event.ydata is None:
@@ -1173,9 +1197,11 @@ class GraphWindow2D(QDialog):
         time_stop = max(0, min(time_stop, len(self.grid_time_axis)))
         freq_start = max(0, min(freq_start, len(self.grid_freq_axis) - 1))
         freq_stop = max(0, min(freq_stop, len(self.grid_freq_axis)))
-        region = (time_start, time_stop, freq_start, freq_stop)
-        self.selected_regions.append((station_index, region))
-        self.flag_button.setEnabled(time_start < time_stop and freq_start < freq_stop)
+        if time_start < time_stop and freq_start < freq_stop:
+            region = (time_start, time_stop, freq_start, freq_stop)
+            self.grid_pending_regions[station_index] = region
+            self.selected_station_index = station_index
+            self.flag_button.setEnabled(True)
 
     def _flag_selected_region(self):
         self._update_selected_region_weights(0.0)
@@ -1184,6 +1210,9 @@ class GraphWindow2D(QDialog):
         direction_index = self.parent.directions.index(self.direction)
         if self.gridplot:
             regions = list(self.selected_regions)
+            for station_idx, pending in self.grid_pending_regions.items():
+                if pending is not None:
+                    regions.append((station_idx, pending))
             if not regions:
                 return
             for antenna_index, region in regions:
@@ -1198,6 +1227,10 @@ class GraphWindow2D(QDialog):
                 self.parent.update_waterfall_weights(region, self.antindex, self.polslot, direction_index, weight, self.propagate_directions.isChecked(), self.propagate_polarizations.isChecked(), self.propagate_antennas.isChecked(), dialog_parent=self)
         self.selected_region = None
         self.selected_regions = []
+        self.grid_pending_regions = {}
+        for patch in self.selection_patches:
+            patch.remove()
+        self.selection_patches = []
         self.flag_button.setEnabled(False)
         if self.gridplot:
             if self.nxm_dimensions is None:
@@ -1213,6 +1246,10 @@ class GraphWindow2D(QDialog):
             self.parent.update_waterfall_weights(region, self.selected_station_index, self.polslot, self.parent.directions.index(self.direction), 0.0, self.propagate_directions.isChecked(), self.propagate_polarizations.isChecked(), self.propagate_antennas.isChecked(), dialog_parent=self)
             self.selected_region = None
             self.selected_regions = []
+            self.grid_pending_regions = {}
+            for patch in self.selection_patches:
+                patch.remove()
+            self.selection_patches = []
             self.flag_button.setEnabled(False)
             if self.nxm_dimensions is None:
                 self.plot_all()
@@ -1226,6 +1263,10 @@ class GraphWindow2D(QDialog):
         self.parent.update_waterfall_weights(region, self.antindex, self.polslot, direction_index, 0.0, self.propagate_directions.isChecked(), self.propagate_polarizations.isChecked(), self.propagate_antennas.isChecked(), dialog_parent=self)
         self.selected_region = None
         self.selected_regions = []
+        self.grid_pending_regions = {}
+        for patch in self.selection_patches:
+            patch.remove()
+        self.selection_patches = []
         self.flag_button.setEnabled(False)
         self._refresh_current_plot()
 
@@ -1495,6 +1536,10 @@ class GraphWindow2D(QDialog):
         for selector in self.grid_rectangle_selectors.values():
             selector.disconnect_events()
         self.grid_rectangle_selectors = {}
+        self.selected_regions = []
+        self.selected_region = None
+        self.grid_pending_regions = {}
+        self.selection_patches = []
         flagging_enabled = self.nxm_dimensions is not None
         self.mark_region_button.setEnabled(flagging_enabled)
         self.flag_button.setEnabled(False)
@@ -1660,6 +1705,7 @@ class GraphWindow2D(QDialog):
         self.ax.clear()
         self.selected_regions = []
         self.selection_patches = []
+        self.grid_pending_regions = {}
         if self.rectangle_selector is not None:
             self.rectangle_selector.disconnect_events()
         self.rectangle_selector = RectangleSelector(self.ax, self._on_region_selected, useblit=False, button=[1], spancoords='data', interactive=True)
