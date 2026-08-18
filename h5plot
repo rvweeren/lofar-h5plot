@@ -403,6 +403,12 @@ class GraphWindow(QDialog):
         self.btn_diriter_next.clicked.connect(self._diriter_next_button_event)
         self.btn_diriter_prev = QPushButton('Previous direction')
         self.btn_diriter_prev.clicked.connect(self._diriter_prev_button_event)
+        has_multiple_directions = (
+            self.parent is not None
+            and 'dir' in self.st.getAxesNames()
+            and len(self.parent.directions) > 1)
+        self.btn_diriter_next.setEnabled(has_multiple_directions)
+        self.btn_diriter_prev.setEnabled(has_multiple_directions)
 
         antiter_widget = QWidget()
         antiter_layout = QHBoxLayout(antiter_widget)
@@ -1045,6 +1051,12 @@ class GraphWindow2D(QDialog):
         self.btn_diriter_next.clicked.connect(self._diriter_next_button_event)
         self.btn_diriter_prev = QPushButton('Previous direction')
         self.btn_diriter_prev.clicked.connect(self._diriter_prev_button_event)
+        has_multiple_directions = (
+            self.parent is not None
+            and 'dir' in self.st.getAxesNames()
+            and len(self.parent.directions) > 1)
+        self.btn_diriter_next.setEnabled(has_multiple_directions)
+        self.btn_diriter_prev.setEnabled(has_multiple_directions)
 
         antiter_widget = QWidget()
         antiter_layout = QHBoxLayout(antiter_widget)
@@ -1812,6 +1824,8 @@ class ListWidget(QListWidget):
     
     https://stackoverflow.com/questions/63497841/qlistwidget-does-not-resize-itself
     """
+    INITIAL_HEIGHT = 300
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -1827,7 +1841,7 @@ class ListWidget(QListWidget):
             return QtCore.QSize(self.width(), 0)
         height = sum(self.sizeHintForRow(i) for i in range(self.count()) if not self.item(i).isHidden())
         width = super().viewportSizeHint().width()
-        return QtCore.QSize(width, height)
+        return QtCore.QSize(width, min(height, self.INITIAL_HEIGHT))
 
 
 class H5PlotGUI(QWidget):
@@ -1994,6 +2008,8 @@ class H5PlotGUI(QWidget):
         self.station_picker = ListWidget()
         self.station_picker.addItems(self.stations)
         self.station_picker.setCurrentRow(0)
+        self.station_picker.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                          QtWidgets.QSizePolicy.Expanding)
 
         plot_layout = QGridLayout()
         plot_layout.addWidget(self.soltab_label_y, 0, 0)
