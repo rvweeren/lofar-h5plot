@@ -9,7 +9,7 @@
 
 ---
 
-H5plot is a small GUI to view the solutions in an H5parm interactively. To run it directly, clone this repository and run as
+H5plot is a small GUI to view, and optionally flag, the solutions in an H5parm interactively. To run it directly, clone this repository and run as
 
     python h5plot <h5parm>
 
@@ -22,7 +22,8 @@ After this, it can simply be run as:
 
     h5plot <h5parm>
 
-![Screenshot](https://raw.githubusercontent.com/tikk3r/lofar-h5plot/master/screen.png)
+![H5plot controls, 1D time and frequency plots, and a waterfall with a marked region](screen.png)
+
 
 # Requirements
 * Python >= 3.6.4
