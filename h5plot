@@ -1622,13 +1622,12 @@ class GraphWindow2D(PlotWindowBase):
         # The figure is cleared below, which also removes the outlines of marked regions.
         self.selection_patches = []
         self._clear_selection()
-        flagging_enabled = self.nxm_dimensions is not None
-        self.mark_region_button.setEnabled(flagging_enabled)
+        self.mark_region_button.setEnabled(True)
         self.flag_button.setEnabled(False)
         self.flag_all_button.setEnabled(False)
-        self.propagate_polarizations.setEnabled(flagging_enabled and not self.do_poldiff)
-        self.propagate_directions.setEnabled(flagging_enabled)
-        self.propagate_antennas.setEnabled(flagging_enabled)
+        self.propagate_polarizations.setEnabled(not self.do_poldiff)
+        self.propagate_directions.setEnabled(True)
+        self.propagate_antennas.setEnabled(True)
         self.fig.clf()
         self.gridplot = True
         isphase = self.st.getType() in ('phase', 'rotation')
@@ -1671,13 +1670,13 @@ class GraphWindow2D(PlotWindowBase):
                     vals = grid_weights
                     vmin, vmax = 0.0, 1.0
                 im = ax.imshow(vals, aspect='auto', extent=[0, x[-1]-x[0], y[0], y[-1]], interpolation='none', cmap=current_cmap, origin='lower', vmin=vmin, vmax=vmax)
-                if flagging_enabled:
-                    x_span = x[-1] - x[0]
-                    y_span = y[-1] - y[0]
-                    x_padding = 0.02 * x_span if x_span else 0.02
-                    y_padding = 0.0325 * y_span if y_span else 0.0325
-                    ax.set_xlim(-x_padding, x[-1] - x[0] + x_padding)
-                    ax.set_ylim(y[0] - y_padding, y[-1] + y_padding)
+                # Leave a margin, so a marked region can start just outside the first or last solution.
+                x_span = x[-1] - x[0]
+                y_span = y[-1] - y[0]
+                x_padding = 0.02 * x_span if x_span else 0.02
+                y_padding = 0.0325 * y_span if y_span else 0.0325
+                ax.set_xlim(-x_padding, x[-1] - x[0] + x_padding)
+                ax.set_ylim(y[0] - y_padding, y[-1] + y_padding)
                 self.grid_rectangle_selectors[station_index] = RectangleSelector(
                     ax,
                     lambda start_event, end_event, station_index=station_index: self._on_grid_region_selected(start_event, end_event, station_index),
@@ -1685,7 +1684,7 @@ class GraphWindow2D(PlotWindowBase):
                     button=[1],
                     spancoords='data',
                     interactive=True)
-                self.grid_rectangle_selectors[station_index].set_active(flagging_enabled and self.mark_region_button.isChecked())
+                self.grid_rectangle_selectors[station_index].set_active(self.mark_region_button.isChecked())
                 if (Nplotted % Ncols):
                     ax.yaxis.set_visible(False)
                 if (Nplotted < Nplots - Ncols):

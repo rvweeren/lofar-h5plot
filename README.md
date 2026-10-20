@@ -50,11 +50,11 @@ Add `--debug` for more detailed logging. Log messages are also written to `h5plo
 
 ## Flagging
 
-Solutions can be flagged in plots against time or frequency, in single waterfalls and in NxM grids (not in **Plot all stations**).
+Solutions can be flagged in plots against time or frequency, in single waterfalls, and in waterfall grids (**Plot NxM stations** and **Plot all stations**).
 
 1. Press **Mark region** (shortcut `A`) and drag a rectangle over the solutions to flag. The rectangle can be moved and resized.
 2. To mark more regions, click outside the rectangle. The region is kept, outlined in red, and a new rectangle can be drawn.
-3. Press **Flag** to flag all marked regions. **Flag all points** flags the whole plot instead: all points shown in a plot against time or frequency, or the whole waterfall of a single station.
+3. Press **Flag** to flag all marked regions. **Flag all points** flags the whole plot instead: all points shown in a plot against time or frequency, or the whole waterfall of a single station. It is not available in grids.
 
 Flagging sets the weights of the selected solutions to zero; the solutions themselves are not changed. In plots against time, a region covers the selected times at the frequency slot that is shown; in plots against frequency, the selected frequencies at the time slot that is shown. The **Expand flags** boxes also flag the same region in all **polarizations**, all **directions** or all **antennas**. In plots against time or frequency, unticking **polarizations** flags only the first polarization.
 
